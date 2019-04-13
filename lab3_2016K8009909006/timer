@@ -1,0 +1,234 @@
+#include <asm.h>
+#include <regdef.h>
+#include <ucas_cde.h>
+
+#define TEST_NUM 68
+
+#define lab2_1  1
+#define lab2_2  1
+#define lab2_3  1
+
+##s0, number
+##s1, number adress 
+##s2, exception use
+##s3, score
+##s4, exception pc
+	.set	noreorder
+	.globl	_start
+	.globl	start
+	.globl	__main
+_start:
+start:
+
+	b	locate
+	nop
+
+##avoid "j locate" not taken
+    lui   t0, 0x8000
+    addiu t1, t1, 1
+    or    t2, t0, zero
+    addu  t3, t5, t6
+    lw    t4, 0(t0)
+    nop
+
+##avoid cpu run error
+.org 0x0ec
+    lui   t0, 0x8000
+    addiu t1, t1, 1
+    or    t2, t0, zero
+    addu  t3, t5, t6
+    lw    t4, 0(t0)
+.org 0x100
+test_finish:
+    addiu t0, t0, 1
+    li t1, 0xff
+    LI (t2, UART_ADDR)
+    sw t1, 0x0(t2)
+    b test_finish
+    nop
+##avoid cpu run error
+    lui   t0, 0x8000
+    addiu t1, t1, 1
+    or    t2, t0, zero
+    addu  t3, t5, t6
+    lw    t4, 0(t0)
+/*
+ *  exception handle
+ */
+.org 0x380
+1:  
+    addiu t0, t0, 1
+    b 1b
+    nop
+
+
+locate:
+	.set noreorder
+
+    LI (a0, LED_RG1_ADDR)
+    LI (a1, LED_RG0_ADDR)
+    LI (a2, LED_ADDR)
+    LI (s1, NUM_ADDR)
+
+    LI (t1, 0x0002)
+    LI (t2, 0x0001)
+    LI (t3, 0xffffffff)
+    LI (t4, 0x00235955)
+    sw t1, 0(a0)
+    sw t2, 0(a1)
+    sw t3, 0(a2)
+    sw t4, 0(s1)
+    lui s1, 0
+    lui s2, 0
+    lui s3, 0
+
+init_clk:
+    LI (t0, 0x0005)
+    LI (t1, 0x0005)
+    LI (t2, 0x0009)
+    LI (t3, 0x0005)
+    LI (t4, 0x0003)
+    LI (t5, 0x0002)
+    LI (s0, 0x0000)
+    mtc0 zero, $9
+    nop
+switch_model:
+    lw   t6, BTN_KEY_ADDR(zero)
+    andi t6, t6, 0x00008000
+    beq  t6, zero, judge_model
+    nop
+    xori s0, s0, 0x00000001
+    beq  s0, zero, set_count
+    nop
+after_set:
+    lw   t6, BTN_KEY_ADDR(zero)
+    bne  t6, zero, after_set
+    nop   
+judge_model:
+    li   t6, 25000000
+    beq  s0, zero, time_cnt
+    nop
+    bne  s0, zero, time_set
+    nop
+time_cnt:
+    mfc0 t7, $9
+    nop
+    blt  t7, t6, time_cnt
+    subu s4, t7, t6
+    mtc0 s4, $9
+    nop
+    addiu s1, zero, 0x1
+    b time_sum
+    nop
+    
+time_set:
+    lw   t6, BTN_KEY_ADDR(zero)
+    nop
+    andi  s1, t6, 0x00000001
+    andi  s2, t6, 0x00000002
+    srl   s2, s2, 0x1
+    andi  s3, t6, 0x00000004
+    srl   s3, s3, 0x2
+    lw   t6, BTN_KEY_ADDR(zero)
+    bne  t6, zero, wait_1s
+    nop
+time_sum:
+    addu t0, t0, s1
+    addu t2, t2, s2
+    addu t4, t4, s3
+    li   t7, 0x0000000a
+    beq  t0, t7, secl_to_sech
+    nop
+ret_1:
+    li   t7, 0x00000006
+    beq  t1, t7, sech_to_minl
+    nop
+ret_2:
+    li   t7, 0x0000000a
+    beq  t2, t7, minl_to_minh
+    nop
+ret_3:
+    li   t7, 0x00000006
+    beq  t3, t7, minh_to_horl
+    nop
+ret_4:
+    li   t7, 0x0000000a
+    beq  t4, t7, horl_to_horh
+    nop
+ret_5:
+    li   t7, 0x00000002
+    beq  t5, t7, reset_all
+    nop
+show:
+    sll  t7, t1, 0x00000004 
+    addu t8, t0, t7
+    sll  t7, t2, 0x00000008
+    addu t8, t8, t7
+    sll  t7, t3, 0x0000000c
+    addu t8, t8, t7
+    sll  t7, t4, 0x00000010
+    addu t8, t8, t7
+    sll  t7, t5, 0x00000014
+    addu t8, t8, t7
+    LI (t9, NUM_ADDR)
+    sw   t8, 0(t9)
+    b  switch_model
+    nop
+set_count:
+    mtc0 zero,$9
+    b after_set
+    nop
+secl_to_sech:
+    and  t0, t0, zero
+    addiu  t1, t1, 0x00000001
+    b ret_1 
+    nop
+sech_to_minl:
+    and  t1, t1, zero
+    addiu  t2, t2, 0x00000001
+    b ret_2 
+    nop
+minl_to_minh:
+    and  t2, t2, zero
+    addiu  t3, t3, 0x00000001
+    b ret_3 
+    nop
+minh_to_horl:
+    and  t3, t3, zero
+    addiu  t4, t4, 0x00000001
+    b ret_4 
+    nop
+horl_to_horh:
+    and  t4, t4, zero
+    addiu  t5, t5, 0x00000001
+    b ret_5 
+    nop
+reset_all:
+    li  t7, 0x00000004
+    beq t4, t7, set_zero
+    nop
+    b   show
+    nop
+set_zero:
+    and  t0, t0, zero
+    and  t1, t1, zero
+    and  t2, t2, zero
+    and  t3, t3, zero
+    and  t4, t4, zero
+    and  t5, t5, zero
+    b   show
+    nop
+wait_1s:
+    mtc0 zero, $9
+    li   t6, 12500000
+    nop
+begin_wait:
+    mfc0 t7, $9
+    nop
+    lw   t8, BTN_KEY_ADDR(zero)
+    beq  t8, zero, time_sum
+    nop
+    blt  t7, t6, begin_wait
+    nop
+    b time_sum
+    nop
